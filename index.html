@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메타 광고 성과 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0f4ff;
+    --muted: #8896b3;
+    --accent: #4f8ef7;
+    --accent2: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --good: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── 헤더 */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+  }
+  .header-logo { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-logo span { color: var(--accent); }
+  .header-meta { font-size: 12px; color: var(--muted); }
+
+  /* ── 탭 */
+  .tabs {
+    display: flex; gap: 0;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+  }
+  .tab {
+    padding: 14px 20px; font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── 레이아웃 */
+  .page { display: none; padding: 2rem; max-width: 1400px; margin: 0 auto; }
+  .page.on { display: block; }
+
+  /* ── 날짜 필터 */
+  .filter-bar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; flex-wrap: wrap;
+  }
+  .filter-bar label { font-size: 12px; color: var(--muted); }
+  .filter-bar input, .filter-bar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: inherit;
+  }
+  .filter-btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    cursor: pointer; border: none; font-family: inherit;
+    background: var(--surface2); color: var(--muted); transition: all .15s;
+  }
+  .filter-btn:hover, .filter-btn.on { background: var(--accent); color: #fff; }
+
+  /* ── KPI 카드 */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 1.5rem; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    position: relative; overflow: hidden;
+  }
+  .kpi::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--kpi-color, var(--accent));
+  }
+  .kpi-label { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-bottom: 10px; text-transform: uppercase; }
+  .kpi-val { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .kpi-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    margin-top: 6px;
+  }
+  .badge-g { background: rgba(52,211,153,.15); color: var(--good); }
+  .badge-y { background: rgba(251,191,36,.15); color: var(--warn); }
+  .badge-r { background: rgba(248,113,113,.15); color: var(--danger); }
+
+  /* ── 차트 패널 */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px; margin-bottom: 1.25rem;
+  }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 8px; }
+  .panel-head h3 { font-size: 14px; font-weight: 600; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; }
+  .li { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .lsq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .ldash { width: 20px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.25rem; }
+
+  /* ── 테이블 */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: right; padding: 10px 12px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2); white-space: nowrap;
+  }
+  th:first-child { text-align: left; }
+  td {
+    text-align: right; padding: 9px 12px;
+    border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap;
+  }
+  td:first-child { text-align: left; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.025); }
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+
+  /* ── 업로드 섹션 */
+  .upload-bar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .upload-bar p { font-size: 13px; color: var(--muted); }
+  .upload-label {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap;
+  }
+  .upload-label:hover { opacity: .85; }
+  .upload-status { font-size: 12px; color: var(--good); }
+
+  /* ── 섹션 타이틀 */
+  .sec { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    .page { padding: 1rem; }
+  }
+  @media (max-width: 500px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .kpi-val { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">Meta Ads <span>Dashboard</span></div>
+  <div class="header-meta" id="hdr-meta">데이터 로딩 중...</div>
+</header>
+
+<nav class="tabs">
+  <div class="tab on" onclick="setTab('daily',this)">일간</div>
+  <div class="tab" onclick="setTab('weekly',this)">주간</div>
+  <div class="tab" onclick="setTab('monthly',this)">월간</div>
+</nav>
+
+<!-- ══ 일간 ══════════════════════════════════════════════ -->
+<div class="page on" id="p-daily">
+  <div class="upload-bar">
+    <div>
+      <p>📁 매일 새 파일을 추가하면 자동으로 누적됩니다</p>
+    </div>
+    <label class="upload-label">
+      ＋ 엑셀 추가
+      <input type="file" id="file-inp" accept=".xlsx,.xls" style="display:none">
+    </label>
+    <span class="upload-status" id="upload-status"></span>
+  </div>
+  <div class="filter-bar">
+    <label>기간</label>
+    <button class="filter-btn on" onclick="setRange(30,this)">30일</button>
+    <button class="filter-btn" onclick="setRange(90,this)">90일</button>
+    <button class="filter-btn" onclick="setRange(180,this)">6개월</button>
+    <button class="filter-btn" onclick="setRange(0,this)">전체</button>
+    <label style="margin-left:8px">직접입력</label>
+    <input type="date" id="d-from">
+    <input type="date" id="d-to">
+    <button class="filter-btn" onclick="applyCustomRange()">적용</button>
+  </div>
+  <div class="kpi-grid" id="kpi-d"></div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>광고비 · ROAS 추이</h3>
+      <div class="legend">
+        <span class="li"><span class="lsq" style="background:#4f8ef7"></span>광고비</span>
+        <span class="li"><span class="ldash" style="background:#34d399"></span>ROAS</span>
+      </div>
+    </div>
+    <div style="position:relative;height:220px"><canvas id="c-d1" role="img" aria-label="일별 광고비 ROAS 추이"></canvas></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>매출액</h3>
+        <div class="legend"><span class="li"><span class="lsq" style="background:#fbbf24"></span>매출</span></div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-d2" role="img" aria-label="일별 매출액"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>클릭 · 전환수</h3>
+        <div class="legend">
+          <span class="li"><span class="lsq" style="background:#818cf8"></span>클릭</span>
+          <span class="li"><span class="lsq" style="background:#f87171"></span>전환</span>
+        </div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-d3" role="img" aria-label="일별 클릭 전환"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>일별 상세</h3></div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>날짜</th><th>노출수</th><th>클릭</th><th>CTR</th><th>광고비</th><th>CPC</th><th>CPM</th><th>전환</th><th>CPA</th><th>매출액</th><th>ROAS</th>
+      </tr></thead><tbody id="tb-d"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 주간 ══════════════════════════════════════════════ -->
+<div class="page" id="p-weekly">
+  <div class="kpi-grid" id="kpi-w"></div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>주간 광고비 · ROAS</h3>
+      <div class="legend">
+        <span class="li"><span class="lsq" style="background:#4f8ef7"></span>광고비</span>
+        <span class="li"><span class="ldash" style="background:#34d399"></span>ROAS</span>
+      </div>
+    </div>
+    <div style="position:relative;height:220px"><canvas id="c-w1" role="img" aria-label="주간 광고비 ROAS"></canvas></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>주간 매출액</h3>
+        <div class="legend"><span class="li"><span class="lsq" style="background:#fbbf24"></span>매출</span></div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-w2" role="img" aria-label="주간 매출액"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>주간 전환수</h3>
+        <div class="legend"><span class="li"><span class="lsq" style="background:#f87171"></span>전환</span></div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-w3" role="img" aria-label="주간 전환수"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>주간 상세</h3></div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>주차</th><th>기간</th><th>노출수</th><th>클릭</th><th>CTR</th><th>광고비</th><th>CPC</th><th>전환</th><th>매출액</th><th>ROAS</th>
+      </tr></thead><tbody id="tb-w"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 월간 ══════════════════════════════════════════════ -->
+<div class="page" id="p-monthly">
+  <div class="kpi-grid" id="kpi-m"></div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>월간 광고비 · ROAS</h3>
+      <div class="legend">
+        <span class="li"><span class="lsq" style="background:#4f8ef7"></span>광고비</span>
+        <span class="li"><span class="ldash" style="background:#34d399"></span>ROAS</span>
+      </div>
+    </div>
+    <div style="position:relative;height:240px"><canvas id="c-m1" role="img" aria-label="월간 광고비 ROAS"></canvas></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>월간 매출액</h3>
+        <div class="legend"><span class="li"><span class="lsq" style="background:#fbbf24"></span>매출</span></div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-m2" role="img" aria-label="월간 매출액"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>월간 전환수</h3>
+        <div class="legend"><span class="li"><span class="lsq" style="background:#f87171"></span>전환</span></div>
+      </div>
+      <div style="position:relative;height:180px"><canvas id="c-m3" role="img" aria-label="월간 전환수"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>월간 상세</h3></div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>월</th><th>노출수</th><th>클릭</th><th>CTR</th><th>광고비</th><th>CPC</th><th>CPM</th><th>전환</th><th>CPA</th><th>매출액</th><th>ROAS</th>
+      </tr></thead><tbody id="tb-m"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SheetJS ══ -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+// ── 내장 데이터 (382일치) ──────────────────────────────
+const BUILT_IN = [{"date":"2024-02-02","imp":31736,"click":27,"cost":21977,"conv":0,"rev":0},{"date":"2024-02-03","imp":37097,"click":26,"cost":22652,"conv":0,"rev":0},{"date":"2024-02-04","imp":46212,"click":28,"cost":23901,"conv":0,"rev":0},{"date":"2024-02-05","imp":40005,"click":18,"cost":20844,"conv":0,"rev":0},{"date":"2024-02-06","imp":38596,"click":38,"cost":21025,"conv":0,"rev":0},{"date":"2024-02-07","imp":39456,"click":29,"cost":21385,"conv":0,"rev":0},{"date":"2024-02-08","imp":38839,"click":33,"cost":20859,"conv":0,"rev":0},{"date":"2024-02-09","imp":42729,"click":34,"cost":20211,"conv":0,"rev":0},{"date":"2024-02-10","imp":51312,"click":37,"cost":21371,"conv":0,"rev":0},{"date":"2024-02-11","imp":54919,"click":40,"cost":22262,"conv":0,"rev":0},{"date":"2024-02-12","imp":52906,"click":21,"cost":20241,"conv":0,"rev":0},{"date":"2024-02-13","imp":41084,"click":28,"cost":18513,"conv":0,"rev":0},{"date":"2024-02-14","imp":39014,"click":25,"cost":19178,"conv":0,"rev":0},{"date":"2024-02-15","imp":10835,"click":2,"cost":5581,"conv":0,"rev":0},{"date":"2024-04-05","imp":2171,"click":201,"cost":29618,"conv":0,"rev":0},{"date":"2024-04-06","imp":2791,"click":213,"cost":30382,"conv":0,"rev":0},{"date":"2024-04-07","imp":2956,"click":281,"cost":31580,"conv":0,"rev":0},{"date":"2024-04-08","imp":3372,"click":285,"cost":30298,"conv":0,"rev":0},{"date":"2024-04-09","imp":3273,"click":298,"cost":29474,"conv":0,"rev":0},{"date":"2024-04-10","imp":3420,"click":307,"cost":29338,"conv":0,"rev":0},{"date":"2024-04-11","imp":3671,"click":339,"cost":29369,"conv":0,"rev":0},{"date":"2024-04-12","imp":3205,"click":257,"cost":29608,"conv":0,"rev":0},{"date":"2024-04-13","imp":3704,"click":293,"cost":30328,"conv":0,"rev":0},{"date":"2024-04-14","imp":4060,"click":296,"cost":31689,"conv":0,"rev":0},{"date":"2024-04-15","imp":3659,"click":266,"cost":30345,"conv":0,"rev":0},{"date":"2024-04-16","imp":3359,"click":188,"cost":29393,"conv":0,"rev":0},{"date":"2024-04-17","imp":3132,"click":213,"cost":29393,"conv":0,"rev":0},{"date":"2024-04-18","imp":3021,"click":212,"cost":29157,"conv":0,"rev":0},{"date":"2024-06-19","imp":4405,"click":238,"cost":50242,"conv":0,"rev":0},{"date":"2024-06-20","imp":6062,"click":296,"cost":49635,"conv":0,"rev":0},{"date":"2024-06-21","imp":6937,"click":319,"cost":49925,"conv":0,"rev":0},{"date":"2024-06-22","imp":8003,"click":354,"cost":50198,"conv":0,"rev":0},{"date":"2024-06-23","imp":9058,"click":362,"cost":51727,"conv":0,"rev":0},{"date":"2024-06-24","imp":7893,"click":339,"cost":49356,"conv":0,"rev":0},{"date":"2024-06-25","imp":7762,"click":313,"cost":48882,"conv":0,"rev":0},{"date":"2024-07-05","imp":2385,"click":30,"cost":48816,"conv":8,"rev":2006918},{"date":"2024-07-06","imp":2377,"click":27,"cost":51144,"conv":10,"rev":2527360},{"date":"2024-07-07","imp":2288,"click":19,"cost":54709,"conv":8,"rev":3305620},{"date":"2024-07-08","imp":5198,"click":43,"cost":103198,"conv":13,"rev":8036650},{"date":"2024-07-09","imp":4482,"click":59,"cost":99710,"conv":12,"rev":2271906},{"date":"2024-07-10","imp":3899,"click":33,"cost":99271,"conv":17,"rev":5168771},{"date":"2024-07-11","imp":4578,"click":32,"cost":97868,"conv":10,"rev":9278850},{"date":"2024-07-12","imp":3780,"click":40,"cost":97249,"conv":14,"rev":4610650},{"date":"2024-07-13","imp":4632,"click":50,"cost":97085,"conv":11,"rev":3058770},{"date":"2024-07-14","imp":7080,"click":72,"cost":139354,"conv":7,"rev":3274430},{"date":"2024-07-15","imp":4224,"click":52,"cost":97222,"conv":14,"rev":4685064},{"date":"2024-07-16","imp":4200,"click":65,"cost":93520,"conv":14,"rev":3550500},{"date":"2024-07-17","imp":4173,"click":62,"cost":92132,"conv":11,"rev":4410900},{"date":"2024-07-18","imp":4680,"click":79,"cost":90668,"conv":10,"rev":2456980},{"date":"2024-07-19","imp":2083,"click":27,"cost":43294,"conv":16,"rev":7059143},{"date":"2024-07-20","imp":2313,"click":31,"cost":43676,"conv":9,"rev":2643890},{"date":"2024-07-21","imp":3037,"click":32,"cost":49965,"conv":20,"rev":3611086},{"date":"2024-10-08","imp":41983,"click":12,"cost":36623,"conv":0,"rev":0},{"date":"2024-10-09","imp":55999,"click":34,"cost":48622,"conv":1,"rev":229600},{"date":"2024-10-10","imp":53181,"click":52,"cost":47880,"conv":0,"rev":0},{"date":"2024-10-11","imp":61545,"click":28,"cost":47781,"conv":0,"rev":0},{"date":"2024-10-12","imp":53715,"click":47,"cost":48260,"conv":0,"rev":0},{"date":"2024-10-13","imp":60908,"click":64,"cost":52936,"conv":0,"rev":0},{"date":"2024-10-14","imp":57879,"click":47,"cost":51644,"conv":0,"rev":0},{"date":"2024-10-15","imp":54592,"click":51,"cost":50022,"conv":0,"rev":0},{"date":"2024-10-16","imp":51425,"click":40,"cost":49454,"conv":0,"rev":0},{"date":"2024-10-17","imp":49813,"click":49,"cost":48847,"conv":1,"rev":220160},{"date":"2024-10-18","imp":51247,"click":52,"cost":48414,"conv":0,"rev":0},{"date":"2024-10-19","imp":52914,"click":52,"cost":48683,"conv":0,"rev":0},{"date":"2024-10-20","imp":27177,"click":33,"cost":25000,"conv":0,"rev":0},{"date":"2024-11-05","imp":1943,"click":54,"cost":38556,"conv":8,"rev":1030210},{"date":"2024-11-06","imp":2214,"click":32,"cost":45439,"conv":13,"rev":2401519},{"date":"2024-11-07","imp":1332,"click":13,"cost":24391,"conv":3,"rev":532850},{"date":"2024-11-08","imp":3240,"click":91,"cost":43333,"conv":7,"rev":1614125},{"date":"2024-11-09","imp":5665,"click":176,"cost":74741,"conv":3,"rev":862780},{"date":"2024-11-10","imp":6419,"click":202,"cost":89842,"conv":17,"rev":3280456},{"date":"2024-11-11","imp":8594,"click":301,"cost":97648,"conv":10,"rev":2820160},{"date":"2024-11-12","imp":9532,"click":461,"cost":93970,"conv":8,"rev":1368597},{"date":"2024-11-13","imp":10817,"click":535,"cost":109086,"conv":9,"rev":2305095},{"date":"2024-11-14","imp":12304,"click":659,"cost":128683,"conv":9,"rev":1962654},{"date":"2024-11-15","imp":12698,"click":665,"cost":126066,"conv":5,"rev":908186},{"date":"2024-11-16","imp":12271,"click":733,"cost":120477,"conv":10,"rev":2572950},{"date":"2024-11-17","imp":15067,"click":969,"cost":146981,"conv":6,"rev":2001520},{"date":"2024-11-18","imp":10853,"click":735,"cost":110538,"conv":8,"rev":1412980},{"date":"2024-11-19","imp":5757,"click":477,"cost":49601,"conv":0,"rev":0},{"date":"2024-11-20","imp":5921,"click":486,"cost":48019,"conv":0,"rev":0},{"date":"2024-11-21","imp":6024,"click":470,"cost":46965,"conv":2,"rev":477050},{"date":"2024-11-22","imp":5787,"click":488,"cost":47934,"conv":0,"rev":0},{"date":"2024-11-23","imp":6056,"click":509,"cost":49416,"conv":1,"rev":349100},{"date":"2024-11-24","imp":7499,"click":697,"cost":58382,"conv":0,"rev":0},{"date":"2024-11-25","imp":6748,"click":522,"cost":51091,"conv":0,"rev":0},{"date":"2024-11-26","imp":6669,"click":495,"cost":49473,"conv":0,"rev":0},{"date":"2024-11-27","imp":6583,"click":558,"cost":47727,"conv":0,"rev":0},{"date":"2024-11-28","imp":6412,"click":518,"cost":45698,"conv":0,"rev":0},{"date":"2024-11-29","imp":6507,"click":501,"cost":48682,"conv":0,"rev":0},{"date":"2024-11-30","imp":7072,"click":542,"cost":48919,"conv":0,"rev":0},{"date":"2024-12-01","imp":8306,"click":686,"cost":55927,"conv":0,"rev":0},{"date":"2024-12-02","imp":7030,"click":496,"cost":51592,"conv":0,"rev":0},{"date":"2024-12-03","imp":6997,"click":537,"cost":50458,"conv":0,"rev":0},{"date":"2024-12-04","imp":6693,"click":559,"cost":47481,"conv":0,"rev":0},{"date":"2024-12-05","imp":6930,"click":568,"cost":46930,"conv":2,"rev":845450},{"date":"2024-12-06","imp":6749,"click":506,"cost":48460,"conv":0,"rev":0},{"date":"2024-12-07","imp":6697,"click":593,"cost":48911,"conv":0,"rev":0},{"date":"2024-12-08","imp":9097,"click":781,"cost":58377,"conv":0,"rev":0},{"date":"2024-12-09","imp":5858,"click":503,"cost":40259,"conv":1,"rev":493280},{"date":"2024-12-10","imp":13732,"click":397,"cost":45800,"conv":1,"rev":389060},{"date":"2024-12-11","imp":16752,"click":426,"cost":50044,"conv":0,"rev":0},{"date":"2024-12-12","imp":15605,"click":356,"cost":46481,"conv":0,"rev":0},{"date":"2024-12-13","imp":16601,"click":357,"cost":47976,"conv":1,"rev":568500},{"date":"2024-12-14","imp":16718,"click":328,"cost":45940,"conv":0,"rev":0},{"date":"2024-12-15","imp":17584,"click":340,"cost":52300,"conv":0,"rev":0},{"date":"2024-12-16","imp":4249,"click":301,"cost":30639,"conv":0,"rev":0},{"date":"2024-12-17","imp":15719,"click":301,"cost":49159,"conv":0,"rev":0},{"date":"2024-12-18","imp":18970,"click":273,"cost":54776,"conv":0,"rev":0},{"date":"2024-12-19","imp":17912,"click":277,"cost":54140,"conv":1,"rev":367370},{"date":"2024-12-20","imp":19197,"click":256,"cost":54225,"conv":0,"rev":0},{"date":"2024-12-21","imp":19353,"click":308,"cost":54744,"conv":0,"rev":0},{"date":"2024-12-22","imp":4828,"click":363,"cost":35472,"conv":2,"rev":809080},{"date":"2024-12-23","imp":3856,"click":253,"cost":29873,"conv":0,"rev":0},{"date":"2024-12-24","imp":3601,"click":217,"cost":28850,"conv":0,"rev":0},{"date":"2024-12-25","imp":4475,"click":333,"cost":30529,"conv":0,"rev":0},{"date":"2024-12-26","imp":13228,"click":280,"cost":39812,"conv":0,"rev":0},{"date":"2024-12-27","imp":17956,"click":355,"cost":49949,"conv":0,"rev":0},{"date":"2024-12-28","imp":17982,"click":525,"cost":45422,"conv":0,"rev":0},{"date":"2024-12-29","imp":21805,"click":484,"cost":52967,"conv":0,"rev":0},{"date":"2024-12-30","imp":20566,"click":463,"cost":50049,"conv":0,"rev":0},{"date":"2024-12-31","imp":20602,"click":366,"cost":46772,"conv":0,"rev":0},{"date":"2025-02-14","imp":28285,"click":23,"cost":29715,"conv":0,"rev":0},{"date":"2025-02-15","imp":27634,"click":27,"cost":30285,"conv":0,"rev":0},{"date":"2025-02-16","imp":29286,"click":18,"cost":32802,"conv":1,"rev":176715},{"date":"2025-02-17","imp":12201,"click":302,"cost":36132,"conv":0,"rev":0},{"date":"2025-02-18","imp":3552,"click":279,"cost":22521,"conv":0,"rev":0},{"date":"2025-02-19","imp":3600,"click":320,"cost":25904,"conv":0,"rev":0},{"date":"2025-04-24","imp":3523,"click":413,"cost":31851,"conv":0,"rev":0},{"date":"2025-04-25","imp":4659,"click":506,"cost":47873,"conv":0,"rev":0},{"date":"2025-04-26","imp":4712,"click":504,"cost":44888,"conv":0,"rev":0},{"date":"2025-04-27","imp":4929,"click":511,"cost":53311,"conv":2,"rev":570060},{"date":"2025-04-28","imp":4128,"click":417,"cost":45502,"conv":0,"rev":0},{"date":"2025-04-29","imp":1611,"click":188,"cost":19909,"conv":1,"rev":289200},{"date":"2025-04-30","imp":35810,"click":911,"cost":146406,"conv":1,"rev":186150},{"date":"2025-05-01","imp":16473,"click":885,"cost":107092,"conv":0,"rev":0},{"date":"2025-05-02","imp":11861,"click":675,"cost":82008,"conv":1,"rev":205280},{"date":"2025-05-03","imp":15332,"click":787,"cost":102065,"conv":1,"rev":218735},{"date":"2025-05-04","imp":17758,"click":846,"cost":102770,"conv":0,"rev":0},{"date":"2025-05-05","imp":19142,"click":815,"cost":98112,"conv":0,"rev":0},{"date":"2025-05-06","imp":3385,"click":277,"cost":23741,"conv":0,"rev":0},{"date":"2025-05-12","imp":4815,"click":444,"cost":36341,"conv":0,"rev":0},{"date":"2025-05-13","imp":5841,"click":548,"cost":48776,"conv":0,"rev":0},{"date":"2025-05-14","imp":5733,"click":483,"cost":48506,"conv":0,"rev":0},{"date":"2025-05-15","imp":4921,"click":428,"cost":45468,"conv":0,"rev":0},{"date":"2025-05-16","imp":4991,"click":448,"cost":50031,"conv":0,"rev":0},{"date":"2025-05-17","imp":5095,"click":460,"cost":50044,"conv":0,"rev":0},{"date":"2025-05-18","imp":5258,"click":487,"cost":49965,"conv":0,"rev":0},{"date":"2025-05-23","imp":4748,"click":650,"cost":44168,"conv":0,"rev":0},{"date":"2025-05-24","imp":5937,"click":733,"cost":55832,"conv":0,"rev":0},{"date":"2025-05-25","imp":5417,"click":631,"cost":52851,"conv":0,"rev":0},{"date":"2025-05-26","imp":9399,"click":1290,"cost":73921,"conv":0,"rev":0},{"date":"2025-05-27","imp":9423,"click":1264,"cost":76880,"conv":1,"rev":215280},{"date":"2025-05-28","imp":10221,"click":1043,"cost":77722,"conv":1,"rev":49000},{"date":"2025-05-29","imp":8819,"click":910,"cost":76230,"conv":1,"rev":189216},{"date":"2025-05-30","imp":8500,"click":806,"cost":73864,"conv":0,"rev":0},{"date":"2025-05-31","imp":9827,"click":947,"cost":85728,"conv":0,"rev":0},{"date":"2025-06-01","imp":11857,"click":968,"cost":85053,"conv":0,"rev":0},{"date":"2025-06-02","imp":10152,"click":895,"cost":79163,"conv":0,"rev":0},{"date":"2025-06-03","imp":10648,"click":879,"cost":76485,"conv":0,"rev":0},{"date":"2025-06-04","imp":5299,"click":377,"cost":28999,"conv":0,"rev":0},{"date":"2025-06-05","imp":5783,"click":396,"cost":29937,"conv":0,"rev":0},{"date":"2025-06-06","imp":5459,"click":425,"cost":29165,"conv":0,"rev":0},{"date":"2025-06-07","imp":6263,"click":441,"cost":30733,"conv":0,"rev":0},{"date":"2025-06-08","imp":6347,"click":468,"cost":29977,"conv":0,"rev":0},{"date":"2025-06-11","imp":15032,"click":19,"cost":20463,"conv":0,"rev":0},{"date":"2025-06-12","imp":19665,"click":24,"cost":27709,"conv":0,"rev":0},{"date":"2025-06-13","imp":19034,"click":27,"cost":27835,"conv":0,"rev":0},{"date":"2025-07-04","imp":2192,"click":193,"cost":17778,"conv":0,"rev":0},{"date":"2025-07-05","imp":3548,"click":316,"cost":27220,"conv":0,"rev":0},{"date":"2025-07-06","imp":4402,"click":385,"cost":33274,"conv":2,"rev":277300},{"date":"2025-07-07","imp":3714,"click":394,"cost":31437,"conv":0,"rev":0},{"date":"2025-07-08","imp":3492,"click":312,"cost":29413,"conv":1,"rev":89700},{"date":"2025-07-09","imp":3412,"click":272,"cost":28578,"conv":0,"rev":0},{"date":"2025-07-10","imp":3241,"click":301,"cost":28717,"conv":0,"rev":0},{"date":"2025-07-11","imp":3143,"click":278,"cost":29065,"conv":1,"rev":95520},{"date":"2025-07-12","imp":3424,"click":276,"cost":29510,"conv":0,"rev":0},{"date":"2025-07-13","imp":3862,"click":347,"cost":32545,"conv":1,"rev":133280},{"date":"2025-07-14","imp":3357,"click":269,"cost":29782,"conv":0,"rev":0},{"date":"2025-07-15","imp":3394,"click":276,"cost":29519,"conv":0,"rev":0},{"date":"2025-07-16","imp":3537,"click":266,"cost":28918,"conv":0,"rev":0},{"date":"2025-07-17","imp":3930,"click":302,"cost":29321,"conv":2,"rev":265980},{"date":"2025-07-18","imp":3962,"click":274,"cost":30126,"conv":0,"rev":0},{"date":"2025-07-19","imp":3889,"click":307,"cost":29776,"conv":0,"rev":0},{"date":"2025-07-20","imp":4294,"click":341,"cost":32931,"conv":0,"rev":0},{"date":"2025-07-21","imp":4019,"click":275,"cost":30334,"conv":0,"rev":0},{"date":"2025-07-22","imp":3940,"click":244,"cost":29345,"conv":0,"rev":0},{"date":"2025-07-23","imp":3829,"click":277,"cost":28712,"conv":0,"rev":0},{"date":"2025-07-24","imp":3910,"click":276,"cost":28431,"conv":0,"rev":0},{"date":"2025-07-25","imp":4261,"click":270,"cost":29949,"conv":0,"rev":0},{"date":"2025-07-26","imp":4552,"click":310,"cost":30291,"conv":0,"rev":0},{"date":"2025-07-27","imp":4983,"click":325,"cost":31973,"conv":0,"rev":0},{"date":"2025-07-28","imp":4317,"click":297,"cost":29843,"conv":0,"rev":0},{"date":"2025-07-29","imp":4169,"click":289,"cost":30222,"conv":1,"rev":36750},{"date":"2025-07-30","imp":4060,"click":318,"cost":29625,"conv":0,"rev":0},{"date":"2025-07-31","imp":4177,"click":288,"cost":28696,"conv":0,"rev":0},{"date":"2025-08-01","imp":5024,"click":241,"cost":28898,"conv":0,"rev":0},{"date":"2025-08-02","imp":6007,"click":271,"cost":30743,"conv":0,"rev":0},{"date":"2025-08-03","imp":6587,"click":269,"cost":31677,"conv":0,"rev":0},{"date":"2025-08-04","imp":5619,"click":270,"cost":30148,"conv":0,"rev":0},{"date":"2025-08-05","imp":4492,"click":268,"cost":30376,"conv":0,"rev":0},{"date":"2025-08-06","imp":4383,"click":249,"cost":29716,"conv":0,"rev":0},{"date":"2025-08-07","imp":4282,"click":208,"cost":28837,"conv":0,"rev":0},{"date":"2025-08-08","imp":4647,"click":258,"cost":29102,"conv":0,"rev":0},{"date":"2025-08-09","imp":5303,"click":228,"cost":30142,"conv":0,"rev":0},{"date":"2025-08-10","imp":4985,"click":251,"cost":31821,"conv":0,"rev":0},{"date":"2025-08-11","imp":4723,"click":255,"cost":29301,"conv":0,"rev":0},{"date":"2025-08-12","imp":4351,"click":241,"cost":30375,"conv":1,"rev":130536},{"date":"2025-08-13","imp":4245,"click":232,"cost":29489,"conv":0,"rev":0},{"date":"2025-08-14","imp":3875,"click":258,"cost":29536,"conv":0,"rev":0},{"date":"2025-08-15","imp":4363,"click":339,"cost":30346,"conv":0,"rev":0},{"date":"2025-08-16","imp":4559,"click":334,"cost":29098,"conv":0,"rev":0},{"date":"2025-08-17","imp":4643,"click":351,"cost":32297,"conv":1,"rev":19000},{"date":"2025-08-18","imp":4215,"click":313,"cost":30671,"conv":0,"rev":0},{"date":"2025-08-19","imp":4290,"click":333,"cost":31216,"conv":0,"rev":0},{"date":"2025-08-20","imp":3872,"click":325,"cost":29491,"conv":0,"rev":0},{"date":"2025-08-21","imp":4073,"click":310,"cost":29391,"conv":0,"rev":0},{"date":"2025-08-22","imp":4005,"click":315,"cost":28842,"conv":0,"rev":0},{"date":"2025-08-23","imp":3878,"click":311,"cost":28088,"conv":1,"rev":161325},{"date":"2025-08-24","imp":4277,"click":323,"cost":32747,"conv":0,"rev":0},{"date":"2025-08-25","imp":4299,"click":315,"cost":30892,"conv":0,"rev":0},{"date":"2025-08-26","imp":4428,"click":270,"cost":29981,"conv":0,"rev":0},{"date":"2025-08-27","imp":4041,"click":276,"cost":28939,"conv":0,"rev":0},{"date":"2025-08-28","imp":3880,"click":244,"cost":29037,"conv":0,"rev":0},{"date":"2025-08-29","imp":2934,"click":232,"cost":28462,"conv":0,"rev":0},{"date":"2025-08-30","imp":3338,"click":285,"cost":29942,"conv":0,"rev":0},{"date":"2025-08-31","imp":3524,"click":277,"cost":29947,"conv":0,"rev":0},{"date":"2025-10-01","imp":2847,"click":378,"cost":23374,"conv":0,"rev":0},{"date":"2025-10-02","imp":3732,"click":427,"cost":27367,"conv":0,"rev":0},{"date":"2025-10-03","imp":4110,"click":495,"cost":27994,"conv":0,"rev":0},{"date":"2025-10-04","imp":4164,"click":432,"cost":28635,"conv":0,"rev":0},{"date":"2025-10-05","imp":4730,"click":519,"cost":32276,"conv":1,"rev":277280},{"date":"2025-10-06","imp":5183,"click":550,"cost":31761,"conv":1,"rev":217560},{"date":"2025-10-07","imp":5152,"click":503,"cost":28685,"conv":0,"rev":0},{"date":"2025-10-08","imp":5149,"click":440,"cost":28923,"conv":1,"rev":49900},{"date":"2025-10-09","imp":5062,"click":525,"cost":29678,"conv":1,"rev":125200},{"date":"2025-10-10","imp":41014,"click":499,"cost":63683,"conv":1,"rev":119000},{"date":"2025-10-11","imp":50678,"click":464,"cost":74146,"conv":0,"rev":0},{"date":"2025-10-12","imp":58323,"click":493,"cost":83052,"conv":0,"rev":0},{"date":"2025-10-13","imp":48399,"click":44,"cost":50265,"conv":0,"rev":0},{"date":"2025-10-14","imp":42395,"click":38,"cost":49565,"conv":0,"rev":0},{"date":"2025-10-15","imp":38178,"click":41,"cost":48841,"conv":1,"rev":331100},{"date":"2025-10-16","imp":35955,"click":36,"cost":49055,"conv":0,"rev":0},{"date":"2025-10-17","imp":36383,"click":35,"cost":49417,"conv":0,"rev":0},{"date":"2025-10-18","imp":37937,"click":35,"cost":49666,"conv":0,"rev":0},{"date":"2025-10-19","imp":38857,"click":44,"cost":49931,"conv":0,"rev":0},{"date":"2025-10-24","imp":2903,"click":325,"cost":25919,"conv":0,"rev":0},{"date":"2025-10-25","imp":5646,"click":579,"cost":42831,"conv":1,"rev":247670},{"date":"2025-10-26","imp":6992,"click":683,"cost":54341,"conv":0,"rev":0},{"date":"2025-10-27","imp":7338,"click":668,"cost":58556,"conv":0,"rev":0},{"date":"2025-10-28","imp":7751,"click":685,"cost":45746,"conv":0,"rev":0},{"date":"2025-10-29","imp":11711,"click":724,"cost":58932,"conv":0,"rev":0},{"date":"2025-10-30","imp":7830,"click":512,"cost":55308,"conv":0,"rev":0},{"date":"2025-10-31","imp":5950,"click":369,"cost":36761,"conv":0,"rev":0},{"date":"2025-11-01","imp":7179,"click":446,"cost":54480,"conv":1,"rev":612576},{"date":"2025-11-02","imp":7404,"click":531,"cost":66823,"conv":1,"rev":385280},{"date":"2025-11-03","imp":7075,"click":475,"cost":62202,"conv":5,"rev":832580},{"date":"2025-11-04","imp":8369,"click":425,"cost":59555,"conv":0,"rev":0},{"date":"2025-11-05","imp":7263,"click":411,"cost":56752,"conv":4,"rev":1244698},{"date":"2025-11-06","imp":7024,"click":422,"cost":63204,"conv":5,"rev":899560},{"date":"2025-11-07","imp":6133,"click":432,"cost":53886,"conv":13,"rev":3229054},{"date":"2025-11-08","imp":5951,"click":379,"cost":50036,"conv":4,"rev":483950},{"date":"2025-11-09","imp":5857,"click":304,"cost":46120,"conv":3,"rev":766330},{"date":"2025-11-10","imp":5180,"click":295,"cost":40232,"conv":1,"rev":320765},{"date":"2025-11-11","imp":4762,"click":304,"cost":39920,"conv":5,"rev":980010},{"date":"2025-11-12","imp":4341,"click":279,"cost":39356,"conv":6,"rev":1193220},{"date":"2025-11-13","imp":4483,"click":268,"cost":37146,"conv":9,"rev":1335608},{"date":"2025-11-14","imp":4829,"click":295,"cost":36717,"conv":6,"rev":1376463},{"date":"2025-11-15","imp":2953,"click":267,"cost":19356,"conv":2,"rev":664050},{"date":"2025-11-16","imp":4279,"click":359,"cost":22448,"conv":1,"rev":99725},{"date":"2025-11-17","imp":4815,"click":299,"cost":19942,"conv":1,"rev":223460},{"date":"2025-11-18","imp":4396,"click":278,"cost":19427,"conv":0,"rev":0},{"date":"2025-11-19","imp":3224,"click":219,"cost":17998,"conv":0,"rev":0},{"date":"2025-11-20","imp":4790,"click":351,"cost":25861,"conv":0,"rev":0},{"date":"2025-11-21","imp":5876,"click":349,"cost":37154,"conv":0,"rev":0},{"date":"2025-11-22","imp":6739,"click":492,"cost":40243,"conv":0,"rev":0},{"date":"2025-11-23","imp":7691,"click":519,"cost":44480,"conv":2,"rev":540250},{"date":"2025-11-24","imp":6325,"click":327,"cost":35192,"conv":0,"rev":0},{"date":"2025-11-25","imp":7542,"click":257,"cost":39788,"conv":0,"rev":0},{"date":"2025-11-26","imp":6434,"click":425,"cost":47655,"conv":0,"rev":0},{"date":"2025-11-27","imp":5103,"click":418,"cost":36548,"conv":0,"rev":0},{"date":"2025-11-28","imp":5387,"click":429,"cost":37678,"conv":0,"rev":0},{"date":"2025-11-29","imp":5290,"click":449,"cost":38654,"conv":1,"rev":221424},{"date":"2025-11-30","imp":4098,"click":433,"cost":39526,"conv":0,"rev":0},{"date":"2025-12-01","imp":1514,"click":92,"cost":33840,"conv":1,"rev":366635},{"date":"2025-12-02","imp":2087,"click":113,"cost":50043,"conv":1,"rev":386198},{"date":"2025-12-03","imp":2280,"click":113,"cost":47106,"conv":3,"rev":882855},{"date":"2025-12-04","imp":2435,"click":101,"cost":48627,"conv":1,"rev":302660},{"date":"2025-12-05","imp":2423,"click":110,"cost":47551,"conv":5,"rev":990593},{"date":"2025-12-06","imp":2696,"click":126,"cost":51998,"conv":2,"rev":548845},{"date":"2025-12-07","imp":3375,"click":194,"cost":53405,"conv":5,"rev":1134338},{"date":"2025-12-08","imp":3431,"click":173,"cost":51104,"conv":2,"rev":758572},{"date":"2025-12-09","imp":3221,"click":171,"cost":48478,"conv":0,"rev":0},{"date":"2025-12-10","imp":3054,"click":133,"cost":49126,"conv":2,"rev":599993},{"date":"2025-12-11","imp":3095,"click":132,"cost":48813,"conv":4,"rev":713079},{"date":"2025-12-12","imp":3495,"click":121,"cost":48082,"conv":0,"rev":0},{"date":"2025-12-13","imp":3128,"click":164,"cost":50962,"conv":2,"rev":370910},{"date":"2025-12-14","imp":2831,"click":148,"cost":49956,"conv":3,"rev":633903},{"date":"2025-12-16","imp":1827,"click":114,"cost":14224,"conv":1,"rev":356405},{"date":"2025-12-17","imp":6910,"click":320,"cost":53227,"conv":0,"rev":0},{"date":"2025-12-18","imp":6269,"click":318,"cost":54773,"conv":0,"rev":0},{"date":"2025-12-19","imp":6120,"click":285,"cost":53669,"conv":0,"rev":0},{"date":"2025-12-20","imp":6973,"click":311,"cost":53237,"conv":2,"rev":470670},{"date":"2025-12-21","imp":7474,"click":347,"cost":57511,"conv":0,"rev":0},{"date":"2025-12-22","imp":7612,"click":340,"cost":51575,"conv":0,"rev":0},{"date":"2025-12-23","imp":1574,"click":54,"cost":11626,"conv":0,"rev":0},{"date":"2026-01-02","imp":2180,"click":135,"cost":25542,"conv":1,"rev":54400},{"date":"2026-01-03","imp":2954,"click":136,"cost":37723,"conv":8,"rev":1954300},{"date":"2026-01-04","imp":3165,"click":138,"cost":42070,"conv":14,"rev":4267236},{"date":"2026-01-05","imp":2898,"click":129,"cost":40823,"conv":12,"rev":4304000},{"date":"2026-01-06","imp":2862,"click":103,"cost":39470,"conv":10,"rev":2628200},{"date":"2026-01-07","imp":3221,"click":132,"cost":39594,"conv":9,"rev":2007500},{"date":"2026-01-08","imp":2882,"click":126,"cost":38766,"conv":14,"rev":5080720},{"date":"2026-01-09","imp":2772,"click":118,"cost":39026,"conv":13,"rev":4357250},{"date":"2026-01-10","imp":2893,"click":159,"cost":40251,"conv":8,"rev":5116300},{"date":"2026-01-11","imp":3239,"click":146,"cost":42872,"conv":15,"rev":5545598},{"date":"2026-01-12","imp":3185,"click":120,"cost":40786,"conv":9,"rev":1611120},{"date":"2026-01-13","imp":2823,"click":121,"cost":39663,"conv":12,"rev":3850650},{"date":"2026-01-14","imp":3196,"click":151,"cost":38752,"conv":2,"rev":410480},{"date":"2026-01-15","imp":3454,"click":156,"cost":39516,"conv":1,"rev":203745},{"date":"2026-01-16","imp":3163,"click":130,"cost":38439,"conv":2,"rev":368981},{"date":"2026-01-17","imp":4077,"click":176,"cost":39972,"conv":2,"rev":743015},{"date":"2026-01-18","imp":3722,"click":185,"cost":41159,"conv":0,"rev":0},{"date":"2026-01-19","imp":3296,"click":150,"cost":38788,"conv":1,"rev":435500},{"date":"2026-01-20","imp":1374,"click":73,"cost":19931,"conv":3,"rev":500795},{"date":"2026-01-21","imp":2280,"click":74,"cost":29171,"conv":2,"rev":384400},{"date":"2026-01-22","imp":2066,"click":68,"cost":29178,"conv":0,"rev":0},{"date":"2026-01-23","imp":2175,"click":81,"cost":29474,"conv":2,"rev":472110},{"date":"2026-01-24","imp":2263,"click":102,"cost":29746,"conv":1,"rev":230615},{"date":"2026-01-25","imp":2589,"click":111,"cost":31020,"conv":1,"rev":111860},{"date":"2026-01-26","imp":2614,"click":64,"cost":29841,"conv":1,"rev":345870},{"date":"2026-01-27","imp":2701,"click":90,"cost":29112,"conv":1,"rev":152745},{"date":"2026-02-02","imp":2636,"click":119,"cost":34682,"conv":0,"rev":0},{"date":"2026-02-03","imp":3521,"click":150,"cost":49058,"conv":0,"rev":0},{"date":"2026-02-04","imp":3110,"click":126,"cost":49086,"conv":0,"rev":0},{"date":"2026-02-05","imp":2702,"click":139,"cost":48370,"conv":2,"rev":608108},{"date":"2026-02-06","imp":2628,"click":95,"cost":48463,"conv":4,"rev":1887430},{"date":"2026-02-07","imp":2914,"click":144,"cost":49134,"conv":1,"rev":162350},{"date":"2026-02-08","imp":3022,"click":122,"cost":53642,"conv":3,"rev":609175},{"date":"2026-02-09","imp":3035,"click":136,"cost":51334,"conv":1,"rev":138325},{"date":"2026-02-10","imp":3200,"click":122,"cost":49283,"conv":1,"rev":100440},{"date":"2026-02-11","imp":3237,"click":165,"cost":49249,"conv":2,"rev":1030710},{"date":"2026-02-12","imp":3245,"click":153,"cost":48656,"conv":0,"rev":0},{"date":"2026-02-13","imp":3530,"click":173,"cost":48320,"conv":0,"rev":0},{"date":"2026-02-14","imp":3815,"click":181,"cost":49483,"conv":1,"rev":200560},{"date":"2026-02-15","imp":3469,"click":175,"cost":49444,"conv":1,"rev":39500},{"date":"2026-02-26","imp":10225,"click":588,"cost":72317,"conv":0,"rev":0},{"date":"2026-02-27","imp":10564,"click":692,"cost":93192,"conv":1,"rev":99456},{"date":"2026-02-28","imp":11363,"click":695,"cost":92690,"conv":1,"rev":311850},{"date":"2026-03-01","imp":13019,"click":868,"cost":110175,"conv":2,"rev":439088},{"date":"2026-03-02","imp":11876,"click":842,"cost":103432,"conv":0,"rev":0},{"date":"2026-03-03","imp":10415,"click":599,"cost":110520,"conv":1,"rev":224550},{"date":"2026-03-04","imp":11846,"click":751,"cost":126620,"conv":3,"rev":547388},{"date":"2026-03-05","imp":11074,"click":740,"cost":129426,"conv":3,"rev":1120580},{"date":"2026-03-06","imp":2628,"click":151,"cost":46615,"conv":0,"rev":0},{"date":"2026-03-07","imp":3157,"click":209,"cost":57557,"conv":3,"rev":699920},{"date":"2026-03-08","imp":4095,"click":236,"cost":64240,"conv":3,"rev":441150},{"date":"2026-03-09","imp":4089,"click":234,"cost":61623,"conv":4,"rev":523042},{"date":"2026-03-10","imp":3752,"click":173,"cost":59016,"conv":4,"rev":711720},{"date":"2026-03-11","imp":4028,"click":195,"cost":58995,"conv":8,"rev":1666457},{"date":"2026-03-12","imp":3775,"click":159,"cost":58724,"conv":2,"rev":375873},{"date":"2026-03-13","imp":3856,"click":194,"cost":58509,"conv":8,"rev":2014459},{"date":"2026-03-14","imp":3757,"click":182,"cost":58817,"conv":7,"rev":1148465},{"date":"2026-03-15","imp":4095,"click":205,"cost":64805,"conv":5,"rev":828310},{"date":"2026-03-16","imp":4111,"click":231,"cost":60631,"conv":1,"rev":270152},{"date":"2026-03-17","imp":3602,"click":189,"cost":59199,"conv":6,"rev":812570},{"date":"2026-03-18","imp":4013,"click":203,"cost":59141,"conv":6,"rev":790240},{"date":"2026-03-19","imp":3651,"click":192,"cost":58633,"conv":0,"rev":0},{"date":"2026-03-20","imp":3479,"click":137,"cost":58539,"conv":3,"rev":745769},{"date":"2026-03-21","imp":3463,"click":168,"cost":58905,"conv":2,"rev":410493},{"date":"2026-03-22","imp":2902,"click":159,"cost":44989,"conv":5,"rev":851600},{"date":"2026-03-23","imp":1620,"click":73,"cost":30262,"conv":2,"rev":175560},{"date":"2026-03-24","imp":1696,"click":83,"cost":29483,"conv":1,"rev":59000},{"date":"2026-03-25","imp":1727,"click":110,"cost":28774,"conv":1,"rev":183590},{"date":"2026-03-26","imp":1726,"click":93,"cost":28536,"conv":1,"rev":109520},{"date":"2026-03-27","imp":1251,"click":74,"cost":22156,"conv":3,"rev":480815},{"date":"2026-03-28","imp":1253,"click":75,"cost":24995,"conv":3,"rev":689550},{"date":"2026-03-29","imp":1728,"click":123,"cost":32781,"conv":3,"rev":302990},{"date":"2026-03-30","imp":5497,"click":331,"cost":109785,"conv":4,"rev":737570},{"date":"2026-03-31","imp":1705,"click":90,"cost":39503,"conv":5,"rev":1014664},{"date":"2026-04-01","imp":7922,"click":531,"cost":169495,"conv":3,"rev":499650},{"date":"2026-04-02","imp":9645,"click":675,"cost":198954,"conv":3,"rev":400550}];
+
+// ── DB (세션 내 누적) ──────────────────────────────────
+let DB = {};
+BUILT_IN.forEach(r => DB[r.date] = r);
+
+// ── 유틸 ──────────────────────────────────────────────
+const N = v => Math.round(v).toLocaleString('ko-KR');
+const W = v => '₩' + N(v);
+const P = (a,b) => b ? (a/b*100).toFixed(2)+'%' : '-';
+const DAY = ['일','월','화','수','목','금','토'];
+
+function sum(arr, key) { return arr.reduce((a,r) => a + (r[key]||0), 0); }
+
+function roasChip(rv, co) {
+  if (!co) return '<span style="color:var(--muted)">-</span>';
+  const v = rv/co;
+  const cls = v>=3?'badge-g':v>=1?'badge-y':'badge-r';
+  return `<span class="chip ${cls}">${v.toFixed(2)}x</span>`;
+}
+
+// ── 날짜 필터 상태 ─────────────────────────────────────
+let rangeFilter = 30;
+let customFrom = null, customTo = null;
+
+function getData() {
+  let arr = Object.values(DB).sort((a,b)=>a.date.localeCompare(b.date));
+  if (customFrom && customTo) {
+    return arr.filter(r => r.date >= customFrom && r.date <= customTo);
+  }
+  if (rangeFilter > 0) {
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - rangeFilter);
+    const cut = cutoff.toISOString().slice(0,10);
+    return arr.filter(r => r.date >= cut);
+  }
+  return arr;
+}
+
+function setRange(n, el) {
+  rangeFilter = n; customFrom = null; customTo = null;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  renderAll();
+}
+function applyCustomRange() {
+  customFrom = document.getElementById('d-from').value;
+  customTo   = document.getElementById('d-to').value;
+  if (!customFrom || !customTo) return;
+  rangeFilter = 0;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
+  renderAll();
+}
+
+// ── KPI ───────────────────────────────────────────────
+function renderKPI(data, elId) {
+  const imp=sum(data,'imp'), click=sum(data,'click'), cost=sum(data,'cost'), conv=sum(data,'conv'), rev=sum(data,'rev');
+  const roas = cost>0?rev/cost:0;
+  const rc = roas>=3?'badge-g':roas>=1?'badge-y':'badge-r';
+  const colors = ['#4f8ef7','#fbbf24','#34d399','#f87171','#818cf8','#a78bfa','#fb923c','#34d399'];
+  const cards = [
+    {label:'총 광고비', val:W(cost), sub:'VAT 제외', color:colors[0]},
+    {label:'총 매출액', val:W(rev), sub:'전환 기반', color:colors[1]},
+    {label:'ROAS', val:roas.toFixed(2)+'x', badge:true, rc, sub:roas>=3?'목표 달성':roas>=1?'개선 필요':'적자', color:colors[2]},
+    {label:'전환수', val:N(conv), sub:'CPA '+(conv>0?W(Math.round(cost/conv)):"-"), color:colors[3]},
+    {label:'노출수', val:N(imp), sub:'CPM '+(imp>0?W(Math.round(cost/imp*1000)):'-'), color:colors[4]},
+    {label:'클릭수', val:N(click), sub:'CTR '+P(click,imp), color:colors[5]},
+    {label:'CPC', val:click>0?W(Math.round(cost/click)):'-', sub:'클릭당 비용', color:colors[6]},
+    {label:'객단가', val:conv>0?W(Math.round(rev/conv)):'-', sub:'전환당 매출', color:colors[7]},
+  ];
+  document.getElementById(elId).innerHTML = cards.map(c=>`
+    <div class="kpi" style="--kpi-color:${c.color}">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-val">${c.val}</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+// ── 차트 ─────────────────────────────────────────────
+const charts = {};
+function destroyChart(id) { if(charts[id]){charts[id].destroy();delete charts[id];} }
+
+const CHART_DEFAULTS = {
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{ticks:{color:'#8896b3',font:{size:10},maxRotation:45,autoSkip:true}, grid:{color:'rgba(255,255,255,0.04)'}},
+    y:{ticks:{color:'#8896b3',font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'}}
+  }
+};
+
+function dualChart(id, labels, costs, roasList) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    data:{labels, datasets:[
+      {type:'bar',label:'광고비',data:costs,backgroundColor:'rgba(79,142,247,0.7)',yAxisID:'y'},
+      {type:'line',label:'ROAS',data:roasList,borderColor:'#34d399',borderWidth:2,pointRadius:2,pointBackgroundColor:'#34d399',yAxisID:'y2',tension:.35,spanGaps:true}
+    ]},
+    options:{...CHART_DEFAULTS, scales:{
+      x:{ticks:{color:'#8896b3',font:{size:10},maxRotation:45,autoSkip:true},grid:{color:'rgba(255,255,255,0.04)'}},
+      y:{position:'left',ticks:{color:'#8896b3',font:{size:10},callback:v=>'₩'+Math.round(v/10000)+'만'},grid:{color:'rgba(255,255,255,0.04)'}},
+      y2:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#34d399',font:{size:10},callback:v=>v.toFixed(1)+'x'}}
+    }}
+  });
+}
+
+function barChart(id, labels, data, color) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:'bar', data:{labels, datasets:[{label:'',data,backgroundColor:color+'bb'}]},
+    options:{...CHART_DEFAULTS, scales:{
+      x:{ticks:{color:'#8896b3',font:{size:10},maxRotation:45,autoSkip:true},grid:{color:'rgba(255,255,255,0.04)'}},
+      y:{ticks:{color:'#8896b3',font:{size:10},callback:v=>v>=1000000?'₩'+(v/10000).toFixed(0)+'만':N(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+    }}
+  });
+}
+
+// ── 주간/월간 집계 ─────────────────────────────────────
+function groupWeekly(data) {
+  const map = {};
+  data.forEach(r => {
+    const d = new Date(r.date); d.setHours(0,0,0,0);
+    const dow = d.getDay()||7; d.setDate(d.getDate()+1-dow);
+    const k = d.toISOString().slice(0,10);
+    if(!map[k]) map[k]={key:k,imp:0,click:0,cost:0,conv:0,rev:0,dates:[]};
+    map[k].imp+=r.imp;map[k].click+=r.click;map[k].cost+=r.cost;map[k].conv+=r.conv;map[k].rev+=r.rev;
+    map[k].dates.push(r.date);
+  });
+  return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key));
+}
+function groupMonthly(data) {
+  const map = {};
+  data.forEach(r => {
+    const k = r.date.slice(0,7);
+    if(!map[k]) map[k]={key:k,imp:0,click:0,cost:0,conv:0,rev:0};
+    map[k].imp+=r.imp;map[k].click+=r.click;map[k].cost+=r.cost;map[k].conv+=r.conv;map[k].rev+=r.rev;
+  });
+  return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+// ── 메인 렌더 ─────────────────────────────────────────
+function renderAll() {
+  const data = getData();
+  if (!data.length) return;
+
+  const all = Object.values(DB).sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById('hdr-meta').textContent =
+    `${all.length}일 누적  ·  ${all[0].date} ~ ${all[all.length-1].date}`;
+
+  // ── 일간
+  renderKPI(data, 'kpi-d');
+  const dl = data.map(r=>r.date.slice(5));
+  dualChart('c-d1', dl, data.map(r=>r.cost), data.map(r=>r.cost>0?+(r.rev/r.cost).toFixed(2):null));
+  barChart('c-d2', dl, data.map(r=>r.rev), '#fbbf24');
+  destroyChart('c-d3');
+  charts['c-d3'] = new Chart(document.getElementById('c-d3'), {
+    data:{labels:dl,datasets:[
+      {type:'bar',label:'클릭',data:data.map(r=>r.click),backgroundColor:'rgba(129,140,248,.7)',yAxisID:'y'},
+      {type:'line',label:'전환',data:data.map(r=>r.conv),borderColor:'#f87171',borderWidth:2,pointRadius:2,pointBackgroundColor:'#f87171',yAxisID:'y2',tension:.35}
+    ]},
+    options:{...CHART_DEFAULTS,scales:{
+      x:{ticks:{color:'#8896b3',font:{size:10},maxRotation:45,autoSkip:true},grid:{color:'rgba(255,255,255,0.04)'}},
+      y:{position:'left',ticks:{color:'#8896b3',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+      y2:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#f87171',font:{size:10}}}
+    }}
+  });
+  document.getElementById('tb-d').innerHTML = [...data].reverse().map(r=>`<tr>
+    <td>${r.date}</td>
+    <td>${N(r.imp)}</td><td>${N(r.click)}</td><td>${P(r.click,r.imp)}</td>
+    <td>${W(r.cost)}</td>
+    <td>${r.click>0?W(Math.round(r.cost/r.click)):'-'}</td>
+    <td>${r.imp>0?W(Math.round(r.cost/r.imp*1000)):'-'}</td>
+    <td>${N(r.conv)}</td>
+    <td>${r.conv>0?W(Math.round(r.cost/r.conv)):'-'}</td>
+    <td>${W(r.rev)}</td><td>${roasChip(r.rev,r.cost)}</td>
+  </tr>`).join('');
+
+  // ── 주간
+  const allWeeks = groupWeekly(Object.values(DB));
+  renderKPI(allWeeks.flatMap(w=>[{imp:w.imp,click:w.click,cost:w.cost,conv:w.conv,rev:w.rev}]), 'kpi-w');
+  const wl = allWeeks.map((_,i)=>`${i+1}주`);
+  dualChart('c-w1', wl, allWeeks.map(w=>w.cost), allWeeks.map(w=>w.cost>0?+(w.rev/w.cost).toFixed(2):null));
+  barChart('c-w2', wl, allWeeks.map(w=>w.rev), '#fbbf24');
+  barChart('c-w3', wl, allWeeks.map(w=>w.conv), '#f87171');
+  document.getElementById('tb-w').innerHTML = [...allWeeks].reverse().map((w,i)=>{
+    const sd=w.dates.reduce((a,b)=>a<b?a:b), ed=w.dates.reduce((a,b)=>a>b?a:b);
+    return `<tr>
+      <td>${sd.slice(5)}~${ed.slice(5)}</td>
+      <td>${N(w.imp)}</td><td>${N(w.click)}</td><td>${P(w.click,w.imp)}</td>
+      <td>${W(w.cost)}</td><td>${w.click>0?W(Math.round(w.cost/w.click)):'-'}</td>
+      <td>${N(w.conv)}</td><td>${W(w.rev)}</td><td>${roasChip(w.rev,w.cost)}</td>
+    </tr>`;
+  }).join('');
+
+  // ── 월간
+  const months = groupMonthly(Object.values(DB));
+  renderKPI(months.flatMap(m=>[{imp:m.imp,click:m.click,cost:m.cost,conv:m.conv,rev:m.rev}]), 'kpi-m');
+  const ml = months.map(m=>m.key.slice(0,7));
+  dualChart('c-m1', ml, months.map(m=>m.cost), months.map(m=>m.cost>0?+(m.rev/m.cost).toFixed(2):null));
+  barChart('c-m2', ml, months.map(m=>m.rev), '#fbbf24');
+  barChart('c-m3', ml, months.map(m=>m.conv), '#f87171');
+  document.getElementById('tb-m').innerHTML = [...months].reverse().map(m=>`<tr>
+    <td>${m.key}</td>
+    <td>${N(m.imp)}</td><td>${N(m.click)}</td><td>${P(m.click,m.imp)}</td>
+    <td>${W(m.cost)}</td>
+    <td>${m.click>0?W(Math.round(m.cost/m.click)):'-'}</td>
+    <td>${m.imp>0?W(Math.round(m.cost/m.imp*1000)):'-'}</td>
+    <td>${N(m.conv)}</td>
+    <td>${m.conv>0?W(Math.round(m.cost/m.conv)):'-'}</td>
+    <td>${W(m.rev)}</td><td>${roasChip(m.rev,m.cost)}</td>
+  </tr>`).join('');
+}
+
+// ── 탭 전환 ───────────────────────────────────────────
+function setTab(id, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ── 엑셀 업로드 (매일 추가) ───────────────────────────
+document.getElementById('file-inp').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
+    const sn = wb.SheetNames.includes('SNS_TOTAL') ? 'SNS_TOTAL' : wb.SheetNames[0];
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null});
+    let hi = raw.findIndex(r=>r&&r.some(v=>v&&String(v).includes('날짜')));
+    if(hi<0) hi=0;
+    const hdr=raw[hi];
+    const col=name=>hdr.findIndex(v=>v&&String(v).includes(name));
+    const iD=col('날짜'),iI=col('노출'),iCk=col('클릭'),iCo=col('광고'),iCv=col('전환'),iRv=col('매출');
+    let added=0;
+    for(let i=hi+1;i<raw.length;i++){
+      const r=raw[i]; if(!r||!r[iD]) continue;
+      let d=r[iD] instanceof Date?r[iD]:new Date(r[iD]);
+      if(isNaN(d)) continue;
+      const key=d.toISOString().slice(0,10);
+      const entry={date:key,imp:+r[iI]||0,click:+r[iCk]||0,cost:+r[iCo]||0,conv:+r[iCv]||0,rev:+r[iRv]||0};
+      if(!DB[key]||DB[key].cost!==entry.cost){DB[key]=entry;added++;}
+    }
+    document.getElementById('upload-status').textContent = added>0?`✓ ${added}일 추가됨`:'이미 최신 데이터';
+    renderAll();
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+// ── 초기 렌더 ─────────────────────────────────────────
+renderAll();
+
+// 괄호 수정 (JS 오타 방지용)
+</script>
+</body>
+</html>
