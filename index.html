@@ -544,9 +544,20 @@ function renderKPI(id,rows){
 const GR='rgba(0,0,0,0.05)', TK='#8892b0';
 const MF={family:'JetBrains Mono',size:11};
 const LG={labels:{color:'#4b5280',font:{family:'JetBrains Mono',size:11},boxWidth:12,padding:14}};
-function baseOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},scales:{x:{ticks:{color:TK,font:MF,maxRotation:40},grid:{color:GR}},y:{ticks:{color:TK,font:MF},grid:{color:GR}}}};}
-function dualOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},scales:{x:{ticks:{color:TK,font:MF,maxRotation:40},grid:{color:GR}},y:{position:'left',ticks:{color:'#16a34a',font:MF},grid:{color:GR}},y1:{position:'right',ticks:{color:'#d97706',font:MF},grid:{display:false}}}};}
-function kill(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function baseOpts(){return{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:LG},spanGaps:true,scales:{x:{ticks:{color:TK,font:MF,maxRotation:40},grid:{color:GR}},y:{min:0,ticks:{color:TK,font:MF},grid:{color:GR}}}};}
+function dualOpts(){return{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:LG},spanGaps:true,scales:{x:{ticks:{color:TK,font:MF,maxRotation:40},grid:{color:GR}},y:{min:0,position:'left',ticks:{color:'#16a34a',font:MF},grid:{color:GR}},y1:{min:0,position:'right',ticks:{color:'#d97706',font:MF},grid:{display:false}}}};}
+function kill(id){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+  // canvas를 새것으로 교체 → 크기 누적 완전 방지
+  const canvas = document.getElementById('c-'+id);
+  if(canvas){
+    const parent = canvas.parentNode;
+    const newCanvas = document.createElement('canvas');
+    newCanvas.id = 'c-'+id;
+    newCanvas.height = canvas.getAttribute('height') || 210;
+    parent.replaceChild(newCanvas, canvas);
+  }
+}
 
 function renderCharts(pfx,rows){
   ['spend','roas','click','cpc'].forEach(s=>kill(pfx+'-'+s));
