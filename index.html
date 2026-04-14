@@ -276,17 +276,29 @@ footer{border-top:1px solid var(--border);padding:20px 36px;font-size:13px;color
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQixMaL_n9clprh6c6Lo0dVThMEXYxH_iY6FrviVDhOucym0HNgMvbH2aBgkN1vVLVg2j7L4Ji3agSe/pub?gid=0&single=true&output=csv';
 
 /* ══════════════════════════════════════════
-   컬럼 매핑 설정
-   구글시트 1열 이름을 바꿔도 여기에 후보만 추가하면 OK
-   (배열 앞쪽 이름 우선 탐색, 대소문자·공백 무시)
+   컬럼 위치 설정 (0부터 시작하는 열 번호)
+   구글시트 실제 열 순서:
+     A(0)=날짜  B(1)=노출  C(2)=클릭
+     D(3)=지출  E(4)=구매  F(5)=전환값
+   ★ 열 순서가 바뀌면 여기 숫자만 수정하세요
 ══════════════════════════════════════════ */
+const COL_IDX = {
+  date:  0,   // A열: 보고시작(날짜)
+  imp:   1,   // B열: 노출
+  click: 2,   // C열: 클릭
+  cost:  3,   // D열: 지출금액(원)
+  conv:  4,   // E열: 구매(건)
+  rev:   5,   // F열: 구매전환값(원)
+};
+
+// 하위 호환용 이름 매핑도 유지 (pick 함수에서 idx 우선)
 const COL = {
-  date:  ['보고시작','date','날짜','일자','보고 시작','start_date','report_date','일'],
-  imp:   ['노출','imp','impressions','노출수'],
-  click: ['클릭','click','clicks','클릭수'],
-  cost:  ['지출금액(원)','cost','지출금액','spend','지출','광고비','광고비(원)','광고비(VAT-)'],
-  conv:  ['구매(건)','conv','구매','conversions','전환수','purchase','purchases'],
-  rev:   ['구매전환값(원)','rev','매출액','전환값(원)','revenue','구매전환값','전환값','매출'],
+  date:  ['보고시작','date','날짜','일자','start_date'],
+  imp:   ['노출','imp','impressions'],
+  click: ['클릭','click','clicks'],
+  cost:  ['지출금액(원)','cost','지출금액','spend','광고비(VAT-)'],
+  conv:  ['구매(건)','conv','구매','purchase'],
+  rev:   ['구매전환값(원)','rev','매출액','전환값(원)','revenue'],
 };
 
 /* ── 상태 ── */
@@ -297,6 +309,11 @@ const PFX     = { daily:'d', weekly:'w', monthly:'m' };
 const TAB_OF  = { d:'daily', w:'weekly', m:'monthly' };
 
 /* ── 유틸 ── */
+// 열 위치(index) 기반으로 값을 읽는 함수 — 헤더 이름과 무관하게 정확
+function pickIdx(rowArr, idx) {
+  return rowArr[idx] !== undefined ? rowArr[idx] : '';
+}
+// 헤더 이름 기반 fallback (COL_IDX가 설정된 경우 사용 안 됨)
 function pick(row, cands) {
   const ents = Object.entries(row);
   for (const c of cands) {
@@ -400,28 +417,35 @@ async function loadData(){
     const text=await resp.text();
     const result=Papa.parse(text,{header:true,skipEmptyLines:true,dynamicTyping:false});
 
-    // 실제 읽힌 헤더 콘솔 출력 (디버그용)
+    // 실제 헤더 & index 기반 읽기 결과 콘솔 출력
     const actualHeaders = Object.keys(result.data[0]||{});
+    const firstRowArr   = Object.values(result.data[0]||{});
     console.log('[WISA] 구글시트 헤더:', actualHeaders);
-    console.log('[WISA] COL 매핑 결과:', {
-      date:  actualHeaders.find(h=>COL.date.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase()))  || '❌ 없음',
-      imp:   actualHeaders.find(h=>COL.imp.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase()))   || '❌ 없음',
-      click: actualHeaders.find(h=>COL.click.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase())) || '❌ 없음',
-      cost:  actualHeaders.find(h=>COL.cost.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase()))  || '❌ 없음',
-      conv:  actualHeaders.find(h=>COL.conv.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase()))  || '❌ 없음',
-      rev:   actualHeaders.find(h=>COL.rev.map(c=>c.toLowerCase()).includes(h.trim().toLowerCase()))   || '❌ 없음',
-    });
+    console.log('[WISA] index 기반 읽기 결과 (첫 번째 행):');
+    console.log('  날짜  (idx', COL_IDX.date,  '):', firstRowArr[COL_IDX.date]);
+    console.log('  노출  (idx', COL_IDX.imp,   '):', firstRowArr[COL_IDX.imp]);
+    console.log('  클릭  (idx', COL_IDX.click, '):', firstRowArr[COL_IDX.click]);
+    console.log('  지출  (idx', COL_IDX.cost,  '):', firstRowArr[COL_IDX.cost]);
+    console.log('  구매  (idx', COL_IDX.conv,  '):', firstRowArr[COL_IDX.conv]);
+    console.log('  전환값(idx', COL_IDX.rev,   '):', firstRowArr[COL_IDX.rev]);
 
-    RAW=result.data.map(row=>{
-      const ds=String(pick(row,COL.date)||'').trim().slice(0,10);
-      if(!ds||!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return null;
-      return{
+    // 각 행을 배열로도 변환해두기 (index 기반 읽기용)
+    const rowsWithArr = result.data.map(row => ({
+      obj: row,
+      arr: Object.values(row),
+    }));
+
+    RAW = rowsWithArr.map(({obj, arr}) => {
+      // ★ index 기반으로 읽기 (헤더 이름 무관, 열 위치만 맞으면 OK)
+      const ds = String(arr[COL_IDX.date] || '').trim().slice(0,10);
+      if(!ds || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) return null;
+      return {
         날짜:  ds,
-        노출:  parseFloat(pick(row,COL.imp))  ||0,
-        클릭:  parseFloat(pick(row,COL.click))||0,
-        지출:  parseFloat(pick(row,COL.cost)) ||0,
-        구매:  parseFloat(pick(row,COL.conv)) ||0,
-        전환값:parseFloat(pick(row,COL.rev))  ||0,
+        노출:  parseFloat(arr[COL_IDX.imp])   || 0,
+        클릭:  parseFloat(arr[COL_IDX.click]) || 0,
+        지출:  parseFloat(arr[COL_IDX.cost])  || 0,
+        구매:  parseFloat(arr[COL_IDX.conv])  || 0,
+        전환값:parseFloat(arr[COL_IDX.rev])   || 0,
       };
     }).filter(Boolean);
 
